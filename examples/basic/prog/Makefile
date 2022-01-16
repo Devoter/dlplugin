@@ -1,0 +1,20 @@
+NAME=prog
+GOFLAGS=
+GOOS=
+GOARCH=
+GOARM=
+CGO_ENABLED=1
+CC=
+BIN_SUFFIX=
+
+ifeq ($(GOOS), windows)
+	BIN_SUFFIX=.exe
+endif
+
+all: $(NAME)$(BIN_SUFFIX)
+
+clean:
+	rm -f $(NAME)$(BIN_SUFFIX)
+
+$(NAME)$(BIN_SUFFIX): main.go
+	GOOS=$(GOOS) GOARCH=$(GOARCH) GOARM=$(GOARM) CGO_ENABLED=$(CGO_ENABLED) CC=$(CC) go build $(GOFLAGS) -o $(NAME)$(BIN_SUFFIX) ./...
