@@ -87,25 +87,17 @@ func libOpen(name string, initializer PluginInitializer) (*Plugin, error) {
 		plugins = make(map[string]*Plugin)
 	}
 
-	p = &Plugin{handler: uintptr(h), filepath: filepath}
+	p = &Plugin{handler: uintptr(h), filepath: filepath, name: name}
 
-	lookupFunc := func(symName string) (uintptr, error) {
-		cname := make([]byte, len(symName)+1)
-		copy(cname, symName)
+	if initializer != nil {
+		lookupFunc := produceLookup(h, name)
 
-		p := C.dlplugin_lookup(h, (*C.char)(unsafe.Pointer(&cname[0])), &cErr)
-		if p == 0 {
-			return 0, errors.New(`dlplugin.Open("` + name + `"): could not find symbol ` + symName + `: ` + C.GoString(cErr))
+		if err := initializer.Init(lookupFunc); err != nil {
+			C.dlplugin_close(C.uintptr_t(p.handler))
+			pluginsMu.Unlock()
+
+			return nil, err
 		}
-
-		return uintptr(p), nil
-	}
-
-	if err := initializer.Init(lookupFunc); err != nil {
-		C.dlplugin_close(C.uintptr_t(p.handler))
-		pluginsMu.Unlock()
-
-		return nil, err
 	}
 
 	plugins[filepath] = p
@@ -125,7 +117,33 @@ func libClose(p *Plugin) error {
 	return nil
 }
 
+func produceLookup(h C.uintptr_t, name string) func(symName string) (uintptr, error) {
+	return func(symName string) (uintptr, error) {
+		var cErr *C.char
+		cname := make([]byte, len(symName)+1)
+		copy(cname, symName)
+
+		p := C.dlplugin_lookup(h, (*C.char)(unsafe.Pointer(&cname[0])), &cErr)
+		if p == 0 {
+			return 0, errors.New(`dlplugin.Open("` + name + `"): could not find symbol ` + symName + `: ` + C.GoString(cErr))
+		}
+
+		return uintptr(p), nil
+	}
+}
+
+func libInit(p *Plugin, initializer PluginInitializer) error {
+	pluginsMu.RLock()
+
+	lookup := produceLookup(C.uintptr_t(p.handler), p.name)
+	err := initializer.Init(lookup)
+
+	pluginsMu.RUnlock()
+
+	return err
+}
+
 var (
-	pluginsMu sync.Mutex
+	pluginsMu sync.RWMutex
 	plugins   map[string]*Plugin
 )

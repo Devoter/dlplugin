@@ -17,3 +17,7 @@ func libOpen(name string, initializer PluginInitializer) (*Plugin, error) {
 func libClose(p *Plugin) error {
 	return errors.New("dlplugin: not implemented")
 }
+
+func libInit(p *Plugin, initializer PluginInitializer) error {
+	return errors.New("dlplugin: not implemented")
+}
